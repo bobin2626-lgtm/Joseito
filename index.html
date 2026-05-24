@@ -133,6 +133,8 @@
             th, td { padding: 12px 10px; font-size: 0.85rem; white-space: nowrap; }
             .actions-cell { flex-wrap: wrap; }
             .whatsapp-btn { bottom: 20px; right: 20px; width: 55px; height: 55px; font-size: 28px; }
+            
+            .header-admin-title { flex-direction: column; align-items: flex-start; gap:10px; width: 100%;}
         }
     </style>
 </head>
@@ -228,6 +230,24 @@
                         <button type="submit" class="btn-gold" style="margin-top: 25px;"><i class="fa-solid fa-paper-plane"></i> Enviar a Evaluación</button>
                     </form>
                 </div>
+
+                <div class="panel" style="margin-top: 30px; padding: 25px;">
+                    <h3 style="font-family:'Cinzel', serif; margin-bottom: 15px; color: var(--gold);"><i class="fa-solid fa-clock-rotate-left"></i> Mi Historial de Declaraciones</h3>
+                    <div style="overflow-x: auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Mercancía</th>
+                                    <th>Presupuesto</th>
+                                    <th>Estatus</th>
+                                </tr>
+                            </thead>
+                            <tbody id="user-tbody-history">
+                                </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
 
             <div id="panel-admin" style="display: none;">
@@ -244,7 +264,8 @@
                                     <th>Nombre y Apellido</th>
                                     <th>Teléfono</th>
                                     <th>Correo Electrónico</th>
-                                    <th>Fecha de Registro</th> <th>Acción</th>
+                                    <th>Fecha de Registro</th>
+                                    <th>Acción</th>
                                 </tr>
                             </thead>
                             <tbody id="admin-tbody-users"></tbody>
@@ -253,13 +274,18 @@
                 </div>
 
                 <div class="panel" style="padding: 25px;">
-                    <h3 style="font-family:'Cinzel', serif; margin-bottom: 15px; color: var(--gold);"><i class="fa-solid fa-file-invoice-dollar"></i> Declaraciones en Tránsito</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;" class="header-admin-title">
+                        <h3 style="font-family:'Cinzel', serif; color: var(--gold); margin: 0;"><i class="fa-solid fa-file-invoice-dollar"></i> Declaraciones en Tránsito</h3>
+                    </div>
+                    
                     <div style="overflow-x: auto;">
                         <table>
                             <thead>
                                 <tr>
                                     <th>Operador</th>
-                                    <th>Mercancía</th> <th>Presupuesto</th> <th>Estatus</th>
+                                    <th>Mercancía</th>
+                                    <th>Presupuesto</th>
+                                    <th>Estatus</th>
                                     <th>Evaluación</th>
                                 </tr>
                             </thead>
@@ -286,6 +312,14 @@
         if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
         const db = firebase.database();
         let currentUser = null;
+
+        // FILTRO DE PALABRAS OBSCENAS
+        const palabrasProhibidas = ['mierda', 'puta', 'coño', 'marico', 'guevo', 'huevo', 'pendejo', 'maldito', 'cabron', 'puto', 'verga', 'mamaguevo', 'zorra', 'maldita', 'coñoemadre', 'mmgvo', 'cdm'];
+        
+        function contieneGroserias(texto) {
+            const textoLimpio = texto.toLowerCase();
+            return palabrasProhibidas.some(palabra => textoLimpio.includes(palabra));
+        }
 
         window.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
@@ -346,6 +380,7 @@
             } else {
                 document.getElementById('panel-user').style.display = 'block';
                 document.getElementById('panel-admin').style.display = 'none';
+                startUserListeners(); 
             }
         }
 
@@ -360,8 +395,6 @@
             if (!name || !phone || !email || !pass) return showAlert("Campos Incompletos", "Llene todos los datos.", "warning");
             
             const userId = 'user_' + Date.now().toString(36);
-            
-            // OBTENER LA FECHA Y HORA ACTUAL PARA EL REGISTRO
             const fechaRegistroActual = new Date().toLocaleString('es-VE'); 
 
             db.ref('users').orderByChild('email').equalTo(email).once('value', snapshot => {
@@ -373,7 +406,7 @@
                         email: email, 
                         pass: pass, 
                         role: 'user',
-                        fechaRegistro: fechaRegistroActual // SE GUARDA EN LA BASE DE DATOS
+                        fechaRegistro: fechaRegistroActual
                     }).then(() => { 
                         showAlert("Registro Exitoso", "Puedes iniciar sesión.", "success"); 
                         toggleAuthMode(false); 
@@ -397,35 +430,69 @@
 
         function sendForm(event) {
             event.preventDefault();
-            const formId = 'form_' + Date.now().toString(36);
             
-            // DATOS NUEVOS DEL FORMULARIO
+            const mercanciaIngresada = document.getElementById('form-importar').value;
+            
+            if (contieneGroserias(mercanciaIngresada)) {
+                return showAlert("Lenguaje Inapropiado", "Por favor, mantén un vocabulario profesional. Evita el uso de palabras obscenas.", "warning");
+            }
+
+            const formId = 'form_' + Date.now().toString(36);
             const formData = {
                 id: formId,
                 userId: currentUser.id || 'desconocido',
                 userName: currentUser.name || 'Operador',
-                mercancia: document.getElementById('form-importar').value || '',
+                mercancia: mercanciaIngresada,
                 presupuesto: document.getElementById('form-presupuesto').value || '',
                 status: 'pendiente',
                 timestamp: firebase.database.ServerValue.TIMESTAMP
             };
 
             db.ref('forms/' + formId).set(formData).then(() => {
-                
                 showAlert("Formulario Transmitido", "Declaración registrada exitosamente.", "success");
                 document.getElementById('aduanaForm').reset();
                 
                 const numeroDestino = "584262262547"; 
-                // MENSAJE DE WHATSAPP ACTUALIZADO
                 const mensaje = `*Nueva Solicitud de Importación*%0A%0A` +
                                 `*Cliente:* ${formData.userName}%0A` +
                                 `*Mercancía a Importar:* ${formData.mercancia}%0A` +
                                 `*Presupuesto:* ${formData.presupuesto}`;
                 
                 window.open(`https://wa.me/${numeroDestino}?text=${mensaje}`, '_blank');
-                
             }).catch(error => { 
                 showAlert("Error al Enviar", "Hubo un problema de conexión con la base de datos.", "error"); 
+            });
+        }
+
+        function startUserListeners() {
+            db.ref('forms').orderByChild('userId').equalTo(currentUser.id).on('value', snapshot => {
+                const tbody = document.getElementById('user-tbody-history');
+                tbody.innerHTML = '';
+                
+                if(snapshot.exists()) {
+                    let formsArray = [];
+                    snapshot.forEach(child => formsArray.push(child.val()));
+                    formsArray.reverse(); 
+
+                    formsArray.forEach(f => {
+                        let estatus = f.status || 'pendiente';
+                        let badgeClass = estatus === 'aprobado' ? 'approved' : (estatus === 'denegado' ? 'denied' : 'pending');
+                        let statusText = estatus.charAt(0).toUpperCase() + estatus.slice(1);
+                        
+                        let fechaStr = f.timestamp ? new Date(f.timestamp).toLocaleDateString('es-VE') : '-';
+                        
+                        tbody.innerHTML += `
+                            <tr>
+                                <td>${fechaStr}</td>
+                                <td>${f.mercancia || 'N/A'}</td>
+                                <td><strong>${f.presupuesto || 'N/A'}</strong></td>
+                                <td><span class="badge ${badgeClass}">${statusText}</span></td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;">Aún no has enviado declaraciones.</td></tr>`;
+                }
             });
         }
 
@@ -436,8 +503,7 @@
                 if(snapshot.exists()) {
                     snapshot.forEach(child => {
                         let u = child.val();
-                        // MOSTRAR FECHA DE REGISTRO
-                        let fecha = u.fechaRegistro || 'Sin registro';
+                        let fecha = u.fechaRegistro || 'Antiguo';
                         tbody.innerHTML += `<tr><td><strong>${u.name || '-'}</strong></td><td>${u.phone || '-'}</td><td>${u.email || '-'}</td><td>${fecha}</td><td><button class="btn-action btn-delete" onclick="adminDeleteUser('${u.id}')"><i class="fa-solid fa-trash"></i> Expulsar</button></td></tr>`;
                     });
                 } else { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">No hay operadores registrados.</td></tr>`; }
@@ -462,7 +528,6 @@
                         let statusText = estatus.charAt(0).toUpperCase() + estatus.slice(1);
                         
                         let nombreUser = f.userName || 'Usuario Sin Nombre';
-                        // LEER LOS NUEVOS CAMPOS PARA EL PANEL
                         let merc = f.mercancia || 'N/A';
                         let pres = f.presupuesto || 'N/A';
                         let fid = f.id || '';
@@ -478,6 +543,7 @@
                                         <button class="btn-action btn-approve" onclick="adminChangeStatus('${fid}', 'aprobado')" title="Aprobar"><i class="fa-solid fa-check"></i></button>
                                         <button class="btn-action btn-deny" onclick="adminChangeStatus('${fid}', 'denegado')" title="Denegar"><i class="fa-solid fa-xmark"></i></button>
                                         <button class="btn-action" style="background:var(--pending); color:#000;" onclick="adminChangeStatus('${fid}', 'pendiente')" title="Reevaluar"><i class="fa-solid fa-rotate-left"></i></button>
+                                        <button class="btn-action btn-delete" onclick="adminDeleteForm('${fid}')" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
                                     </td>
                                 </tr>
                             `;
@@ -489,7 +555,19 @@
             });
         }
 
+        // FUNCIONES DE ELIMINACIÓN INDIVIDUAL
+        function adminDeleteForm(formId) {
+            if(confirm("¿Estás seguro de que deseas eliminar esta declaración de forma permanente?")) {
+                db.ref('forms/' + formId).remove().then(() => {
+                    showAlert("Declaración Eliminada", "El registro ha sido borrado del historial con éxito.", "success");
+                }).catch(error => {
+                    showAlert("Error", "No se pudo borrar el registro.", "error");
+                });
+            }
+        }
+
         function adminChangeStatus(formId, newStatus) { db.ref('forms/' + formId).update({ status: newStatus }).then(() => { showAlert("Estatus Modificado", "Se ha actualizado la evaluación del documento.", "success"); }); }
+        
         function adminDeleteUser(userId) { if(confirm("¿Estás seguro de eliminar a este usuario?")) { db.ref('users/' + userId).remove().then(() => { showAlert("Operador Eliminado", "Cuenta removida con éxito.", "success"); }); } }
     </script>
 </body>
