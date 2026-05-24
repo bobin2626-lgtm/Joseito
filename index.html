@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Black Diamond - Gestión Aduanera Premium</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Montserrat:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+
+    <style>
+        :root {
+            --bg-pure: #000000; --bg-dark: #0a0a0a; --panel-bg: #111111; --input-bg: #161616;
+            --gold: #d4af37; --gold-glow: rgba(212, 175, 55, 0.2); --text-light: #ffffff;
+            --text-muted: #a0a0a0; --border: #222222; --success: #2ecc71; --error: #e74c3c; --pending: #f39c12;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Montserrat', sans-serif; }
+        body { background-color: var(--bg-pure); color: var(--text-light); overflow-x: hidden; min-height: 100vh; }
+
+        /* --- SPLASH SCREEN --- */
+        #splash-screen { position: fixed; top:0; left:0; width:100vw; height:100vh; background-color: var(--bg-pure); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 1s ease-out; }
+        .splash-logo { font-size: 8rem; color: var(--bg-dark); text-shadow: 0 0 20px rgba(255,255,255,0.1), 0 0 40px var(--gold); animation: pulseDiamond 2.5s infinite ease-in-out; }
+        .splash-title { font-family: 'Cinzel', serif; font-size: 2.2rem; letter-spacing: 6px; color: var(--text-light); margin-top: 20px; text-transform: uppercase; opacity: 0; animation: fadeInText 1.5s forwards 0.5s; }
+        .splash-title span { color: var(--gold); }
+        @keyframes pulseDiamond { 0% { transform: scale(1); filter: drop-shadow(0 0 10px rgba(0,0,0,0.9)); } 50% { transform: scale(1.08); filter: drop-shadow(0 0 30px var(--gold)); } 100% { transform: scale(1); filter: drop-shadow(0 0 10px rgba(0,0,0,0.9)); } }
+        @keyframes fadeInText { to { opacity: 1; } }
+
+        /* --- ALERTAS --- */
+        #custom-alert-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; display: none; backdrop-filter: blur(5px); }
+        #custom-alert { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.8); background: var(--panel-bg); border: 2px solid var(--gold); padding: 30px 40px; border-radius: 8px; z-index: 10000; box-shadow: 0 0 50px rgba(0,0,0,0.9), 0 0 30px var(--gold-glow); text-align: center; opacity: 0; visibility: hidden; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); max-width: 400px; width: 90%; }
+        #custom-alert.active { opacity: 1; visibility: visible; transform: translate(-50%, -50%) scale(1); }
+        #custom-alert i { font-size: 3.5rem; color: var(--gold); margin-bottom: 15px; display: block; }
+        #custom-alert h3 { font-family: 'Cinzel', serif; margin-bottom: 10px; letter-spacing: 1px; color: var(--text-light); }
+        #custom-alert p { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 20px; line-height: 1.4; }
+
+        /* --- FORMS Y BOTONES --- */
+        .auth-container { max-width: 450px; margin: 80px auto; padding: 20px; display: none; }
+        .panel { background: var(--panel-bg); border: 1px solid var(--border); padding: 40px; border-radius: 12px; box-shadow: 0 15px 35px rgba(0,0,0,0.7); }
+        .panel-header-logo { text-align: center; margin-bottom: 30px; }
+        .panel-header-logo i { font-size: 3rem; color: var(--gold); filter: drop-shadow(0 0 10px var(--gold-glow)); }
+        .panel-header-logo h2 { font-family: 'Cinzel', serif; letter-spacing: 3px; font-size: 1.6rem; margin-top: 10px; color: var(--text-light); }
+        .panel-header-logo h2 span { color: var(--gold); }
+        .form-group { display: flex; flex-direction: column; margin-bottom: 20px; position: relative; }
+        .form-group label { font-size: 0.75rem; text-transform: uppercase; color: var(--gold); letter-spacing: 2px; margin-bottom: 8px; font-weight: 600; }
+        .form-group i { position: absolute; bottom: 14px; left: 15px; color: var(--text-muted); }
+        .form-group input, .form-group select, .form-group textarea { background: var(--input-bg); border: 1px solid var(--border); color: var(--text-light); padding: 12px 12px 12px 42px; border-radius: 6px; font-size: 0.95rem; outline: none; transition: all 0.3s; width: 100%; }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--gold); box-shadow: 0 0 10px var(--gold-glow); }
+        .btn-gold { background: linear-gradient(135deg, #111, #222); border: 1px solid var(--gold); color: var(--gold); padding: 14px; font-weight: bold; letter-spacing: 2px; text-transform: uppercase; border-radius: 6px; cursor: pointer; transition: all 0.3s; width: 100%; }
+        .btn-gold:hover { background: var(--gold); color: var(--bg-pure); box-shadow: 0 0 15px var(--gold); }
+        .switch-mode { text-align: center; margin-top: 20px; font-size: 0.85rem; color: var(--text-muted); cursor: pointer; }
+        .switch-mode span { color: var(--gold); text-decoration: underline; }
+
+        /* --- ESTRUCTURA APP --- */
+        .app-layout { display: none; min-height: 100vh; grid-template-columns: 260px 1fr; }
+        
+        .sidebar { background: var(--panel-bg); border-right: 1px solid var(--border); padding: 30px 20px; display: flex; flex-direction: column; justify-content: space-between; }
+        .sidebar-top .logo { font-family: 'Cinzel', serif; font-size: 1.3rem; letter-spacing: 2px; text-align: center; color: var(--text-light); padding-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.05); margin-bottom: 20px; }
+        .sidebar-top .logo span { color: var(--gold); }
+        .sidebar-user { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .sidebar-user i { font-size: 3.5rem; color: var(--text-muted); margin-bottom: 15px; display: block; }
+        .nav-btn { display: flex; align-items: center; gap: 12px; padding: 12px 15px; color: var(--text-light); border: 1px solid transparent; border-radius: 6px; cursor: pointer; transition: all 0.3s; margin-bottom: 10px; width: 100%; background: none; text-align: left; font-size: 0.9rem;}
+        .nav-btn:hover { color: var(--gold); border-color: var(--gold); background: rgba(255,255,255,0.02); }
+        .sidebar-bottom { border-top: 1px solid var(--border); padding-top: 20px; }
+        
+        .content-area { padding: 40px; max-width: 1200px; width: 100%; margin: 0 auto; overflow-y: auto; }
+        .content-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 35px; }
+        .content-header h2 { font-family: 'Cinzel', serif; letter-spacing: 2px; font-size: 1.8rem; color: var(--gold); }
+
+        .form-grid { display: flex; flex-direction: column; gap: 20px; }
+        .form-grid .form-group input, .form-grid .form-group select, .form-grid .form-group textarea { padding-left: 15px; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: var(--panel-bg); border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+        th, td { padding: 14px 18px; text-align: left; font-size: 0.9rem; border-bottom: 1px solid var(--border); color: var(--text-light); }
+        th { background: #151515; color: var(--gold); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; }
+        tr:hover { background: rgba(255,255,255,0.02); }
+
+        .badge { padding: 5px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: bold; text-transform: uppercase; }
+        .badge.pending { background: rgba(243, 156, 18, 0.15); color: var(--pending); border: 1px solid var(--pending); }
+        .badge.approved { background: rgba(46, 204, 113, 0.15); color: var(--success); border: 1px solid var(--success); }
+        .badge.denied { background: rgba(231, 76, 60, 0.15); color: var(--error); border: 1px solid var(--error); }
+
+        .actions-cell { display: flex; gap: 8px; }
+        .btn-action { padding: 6px 12px; border-radius: 4px; font-size: 0.75rem; border: none; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .btn-approve { background: var(--success); color: #000; }
+        .btn-deny { background: var(--pending); color: #000; }
+        .btn-delete { background: var(--error); color: #fff; }
+        .btn-action:hover { opacity: 0.8; transform: translateY(-2px); }
+
+        .whatsapp-btn { position: fixed; bottom: 30px; right: 30px; background: #25d366; color: white; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; box-shadow: 0 4px 15px rgba(37, 211, 102, 0.4); z-index: 990; transition: all 0.3s; text-decoration: none; }
+        .whatsapp-btn:hover { transform: scale(1.1); box-shadow: 0 4px 20px rgba(37, 211, 102, 0.6); }
+
+        .mobile-header { display: none; }
+        #sidebar-overlay { display: none; }
+
+        /* --- OPTIMIZACIÓN RESPONSIVA PARA TELÉFONOS --- */
+        @media (max-width: 768px) {
+            .app-layout { display: block; }
+            
+            #sidebar-overlay {
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.7); z-index: 1000; backdrop-filter: blur(2px);
+            }
+            #sidebar-overlay.active { display: block; }
+
+            .sidebar { 
+                position: fixed; top: 0; left: -100%; width: 280px; height: 100vh; 
+                z-index: 1001; transition: left 0.3s ease-in-out; 
+                border-right: 1px solid var(--border); box-shadow: 5px 0 20px rgba(0,0,0,0.9);
+            }
+            .sidebar.open { left: 0; }
+            
+            .mobile-header { 
+                display: flex; justify-content: space-between; align-items: center; 
+                padding: 15px 25px; background: var(--bg-dark); border-bottom: 1px solid var(--border); 
+                position: sticky; top: 0; z-index: 995; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            }
+            .mobile-header .logo { font-family: 'Cinzel', serif; font-size: 1.2rem; letter-spacing: 2px; color: var(--text-light); }
+            .mobile-header .logo span { color: var(--gold); }
+            .hamburger-btn { background: none; border: none; color: var(--gold); font-size: 1.8rem; cursor: pointer; transition: 0.2s; }
+            .hamburger-btn:active { transform: scale(0.9); }
+
+            .content-area { padding: 20px 15px; }
+            .panel { padding: 25px 20px; }
+            .auth-container { margin: 40px auto; padding: 15px; }
+            .content-header { flex-direction: column; align-items: flex-start; gap: 10px; margin-bottom: 25px; }
+            .content-header h2 { font-size: 1.4rem; }
+            .splash-logo { font-size: 5.5rem; }
+            .splash-title { font-size: 1.6rem; letter-spacing: 3px; }
+            th, td { padding: 12px 10px; font-size: 0.85rem; white-space: nowrap; }
+            .actions-cell { flex-wrap: wrap; }
+            .whatsapp-btn { bottom: 20px; right: 20px; width: 55px; height: 55px; font-size: 28px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="splash-screen">
+        <div class="splash-logo"><i class="fa-solid fa-gem" style="color: #0d0d0d;"></i></div>
+        <div class="splash-title">Black <span>Diamond</span></div>
+    </div>
+
+    <div id="custom-alert-overlay"></div>
+    <div id="custom-alert">
+        <i id="alert-icon" class="fa-solid fa-circle-check"></i>
+        <h3 id="alert-title">Notificación</h3>
+        <p id="alert-msg">Mensaje del sistema.</p>
+        <button class="btn-gold" style="padding: 10px 20px; font-size:0.8rem; width: auto;" onclick="closeAlert()">Aceptar</button>
+    </div>
+
+    <a href="https://wa.me/584262262547?text=Saludos%20Soporte%20Técnico%20Black%20Diamond" class="whatsapp-btn" target="_blank" title="Soporte Técnico">
+        <i class="fa-brands fa-whatsapp"></i>
+    </a>
+
+    <div id="view-auth" class="auth-container">
+        <div id="login-box" class="panel">
+            <div class="panel-header-logo"><i class="fa-solid fa-gem"></i><h2>Black <span>Diamond</span></h2></div>
+            <div class="form-group"><label>Correo Electrónico</label><i class="fa-solid fa-envelope"></i><input type="email" id="login-email" placeholder="correo@ejemplo.com"></div>
+            <div class="form-group"><label>Contraseña</label><i class="fa-solid fa-lock"></i><input type="password" id="login-pass" placeholder="••••••••"></div>
+            <button class="btn-gold" onclick="authLogin()">Ingresar</button>
+            <div class="switch-mode" onclick="toggleAuthMode(true)">¿Nuevo operador? <span>Regístrate aquí</span></div>
+        </div>
+        <div id="register-box" class="panel" style="display: none;">
+            <div class="panel-header-logo"><i class="fa-solid fa-gem"></i><h2>Registro de Operador</h2></div>
+            <div class="form-group"><label>Nombre y apellido</label><i class="fa-solid fa-user"></i><input type="text" id="reg-name" placeholder="Ej: Juan Pérez"></div>
+            <div class="form-group"><label>Teléfono</label><i class="fa-solid fa-phone"></i><input type="tel" id="reg-phone" placeholder="Ej: 04121234567"></div>
+            <div class="form-group"><label>Correo Electrónico</label><i class="fa-solid fa-envelope"></i><input type="email" id="reg-email" placeholder="correo@ejemplo.com"></div>
+            <div class="form-group"><label>Contraseña</label><i class="fa-solid fa-lock"></i><input type="password" id="reg-pass" placeholder="Crea una contraseña"></div>
+            <button class="btn-gold" onclick="authRegister()">Crear Cuenta</button>
+            <div class="switch-mode" onclick="toggleAuthMode(false)">¿Ya tienes cuenta? <span>Inicia sesión</span></div>
+        </div>
+    </div>
+
+    <div id="view-app" class="app-layout">
+        
+        <div id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+        <div class="mobile-header">
+            <div class="logo"><i class="fa-solid fa-gem" style="color: var(--gold);"></i> Black <span>Diamond</span></div>
+            <button class="hamburger-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+        </div>
+
+        <aside class="sidebar">
+            <div class="sidebar-top">
+                <div class="logo"><i class="fa-solid fa-gem" style="color: var(--gold);"></i> Black <span>Diamond</span></div>
+                
+                <div class="sidebar-user">
+                    <i class="fa-solid fa-circle-user"></i>
+                    <p id="user-display-name" style="font-weight: bold; color: var(--gold); font-size: 0.95rem;"></p>
+                    <p id="user-display-role" style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; margin-top: 5px; letter-spacing: 1px;"></p>
+                </div>
+                
+                <button class="nav-btn" onclick="location.reload();"><i class="fa-solid fa-rotate-right"></i> Recargar Página</button>
+            </div>
+            <div class="sidebar-bottom">
+                <button class="nav-btn" onclick="sysLogout()" style="border-color: rgba(231,76,60,0.3); color: var(--error);"><i class="fa-solid fa-right-from-bracket"></i> Cerrar Sesión</button>
+            </div>
+        </aside>
+
+        <main class="content-area">
+            <div id="panel-user" style="display: none;">
+                <div class="content-header">
+                    <h2>Estas listo para importar?</h2><span style="color: var(--text-muted);"><i class="fa-solid fa-file-signature"></i> Formulario Único</span>
+                </div>
+                <div class="panel">
+                    <form id="aduanaForm" onsubmit="sendForm(event)">
+                        <div class="form-grid">
+                            <div class="form-group full-width">
+                                <label>Que te gustaría importar?</label>
+                                <textarea id="form-importar" rows="3" placeholder="Ej: Ropa, tecnología, repuestos..." required></textarea>
+                            </div>
+                            <div class="form-group full-width">
+                                <label>Cuál es tu presupuesto? (USD)</label>
+                                <select id="form-presupuesto" required>
+                                    <option value="">-- Selecciona un rango --</option>
+                                    <option value="De 0 a 500">0 a 500</option>
+                                    <option value="De 500 a 1000">500 a 1000</option>
+                                    <option value="De 1000 a 3000">1000 a 3000</option>
+                                    <option value="De 3000 a 6000">3000 a 6000</option>
+                                    <option value="De 6000 a 10000">6000 a 10000</option>
+                                    <option value="Más de 10000">10000 más</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-gold" style="margin-top: 25px;"><i class="fa-solid fa-paper-plane"></i> Enviar a Evaluación</button>
+                    </form>
+                </div>
+            </div>
+
+            <div id="panel-admin" style="display: none;">
+                <div class="content-header">
+                    <h2>Consola Administrativa</h2><span style="color: var(--error); font-weight: bold; border: 1px solid var(--error); padding: 5px 10px; border-radius: 4px;"><i class="fa-solid fa-shield-halved"></i> MASTER</span>
+                </div>
+                
+                <div class="panel" style="margin-bottom: 30px; padding: 25px;">
+                    <h3 style="font-family:'Cinzel', serif; margin-bottom: 15px; color: var(--gold);"><i class="fa-solid fa-users"></i> Red de Operadores</h3>
+                    <div style="overflow-x: auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Nombre y Apellido</th>
+                                    <th>Teléfono</th>
+                                    <th>Correo Electrónico</th>
+                                    <th>Fecha de Registro</th> <th>Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-tbody-users"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="panel" style="padding: 25px;">
+                    <h3 style="font-family:'Cinzel', serif; margin-bottom: 15px; color: var(--gold);"><i class="fa-solid fa-file-invoice-dollar"></i> Declaraciones en Tránsito</h3>
+                    <div style="overflow-x: auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Operador</th>
+                                    <th>Mercancía</th> <th>Presupuesto</th> <th>Estatus</th>
+                                    <th>Evaluación</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-tbody-forms"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBu--ERRjiEpIBn4G5Lgfi_vTRwfQhFXZQ",
+            authDomain: "proyecto-de-jose-1aa5c.firebaseapp.com",
+            databaseURL: "https://proyecto-de-jose-1aa5c-default-rtdb.firebaseio.com", 
+            projectId: "proyecto-de-jose-1aa5c",
+            storageBucket: "proyecto-de-jose-1aa5c.firebasestorage.app",
+            messagingSenderId: "212493810169",
+            appId: "1:212493810169:web:d6b1638df094b98c20e528",
+            measurementId: "G-Z5Z9Z0CBQ1"
+        };
+        
+        if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
+        const db = firebase.database();
+        let currentUser = null;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                document.getElementById('splash-screen').style.opacity = '0';
+                setTimeout(() => { 
+                    document.getElementById('splash-screen').style.display = 'none'; 
+                    checkActiveSession(); 
+                }, 1000);
+            }, 2500);
+        });
+
+        function showAlert(title, text, type = 'success') {
+            const alertBox = document.getElementById('custom-alert');
+            const overlay = document.getElementById('custom-alert-overlay');
+            const icon = document.getElementById('alert-icon');
+            
+            document.getElementById('alert-title').innerText = title;
+            document.getElementById('alert-msg').innerText = text;
+            if (type === 'success') { icon.className = "fa-solid fa-circle-check"; icon.style.color = "var(--success)"; }
+            else if (type === 'error') { icon.className = "fa-solid fa-circle-xmark"; icon.style.color = "var(--error)"; }
+            else { icon.className = "fa-solid fa-triangle-exclamation"; icon.style.color = "var(--pending)"; }
+            
+            overlay.style.display = 'block'; alertBox.classList.add('active');
+        }
+
+        function closeAlert() { document.getElementById('custom-alert').classList.remove('active'); setTimeout(() => document.getElementById('custom-alert-overlay').style.display = 'none', 300); }
+        function toggleAuthMode(showRegister) { document.getElementById('login-box').style.display = showRegister ? 'none' : 'block'; document.getElementById('register-box').style.display = showRegister ? 'block' : 'none'; }
+        function screenRouter(view) { document.getElementById('view-auth').style.display = (view === 'auth') ? 'block' : 'none'; document.getElementById('view-app').style.display = (view === 'app') ? 'block' : 'none'; }
+
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('active');
+        }
+
+        function checkActiveSession() {
+            const savedUser = localStorage.getItem('bd_session');
+            if (savedUser) {
+                currentUser = JSON.parse(savedUser);
+                if (currentUser.role !== 'admin') {
+                    db.ref('users/' + currentUser.id).once('value').then((snapshot) => {
+                        if (!snapshot.exists()) { sysLogout(true); } else { loadDashboard(); }
+                    }).catch(error => { showAlert("Error de Conexión", "Verifica las reglas de seguridad en Firebase.", "error"); });
+                } else { loadDashboard(); }
+            } else { screenRouter('auth'); }
+        }
+
+        function loadDashboard() {
+            screenRouter('app');
+            document.getElementById('user-display-name').innerText = currentUser.name || "Usuario";
+            document.getElementById('user-display-role').innerText = currentUser.role === 'admin' ? 'Administrador Global' : 'Operador Aduanero';
+
+            if (currentUser.role === 'admin') {
+                document.getElementById('panel-admin').style.display = 'block';
+                document.getElementById('panel-user').style.display = 'none';
+                startAdminListeners(); 
+            } else {
+                document.getElementById('panel-user').style.display = 'block';
+                document.getElementById('panel-admin').style.display = 'none';
+            }
+        }
+
+        function sysLogout(force = false) { localStorage.removeItem('bd_session'); currentUser = null; screenRouter('auth'); if(force) { showAlert("Cuenta Inhabilitada", "Tu cuenta ha sido eliminada por el administrador.", "error"); } }
+
+        function authRegister() {
+            const name = document.getElementById('reg-name').value.trim(); 
+            const phone = document.getElementById('reg-phone').value.trim(); 
+            const email = document.getElementById('reg-email').value.trim().toLowerCase(); 
+            const pass = document.getElementById('reg-pass').value;
+            
+            if (!name || !phone || !email || !pass) return showAlert("Campos Incompletos", "Llene todos los datos.", "warning");
+            
+            const userId = 'user_' + Date.now().toString(36);
+            
+            // OBTENER LA FECHA Y HORA ACTUAL PARA EL REGISTRO
+            const fechaRegistroActual = new Date().toLocaleString('es-VE'); 
+
+            db.ref('users').orderByChild('email').equalTo(email).once('value', snapshot => {
+                if (snapshot.exists()) { showAlert("Atención", "El correo ya está registrado.", "error"); } else {
+                    db.ref('users/' + userId).set({ 
+                        id: userId, 
+                        name: name, 
+                        phone: phone, 
+                        email: email, 
+                        pass: pass, 
+                        role: 'user',
+                        fechaRegistro: fechaRegistroActual // SE GUARDA EN LA BASE DE DATOS
+                    }).then(() => { 
+                        showAlert("Registro Exitoso", "Puedes iniciar sesión.", "success"); 
+                        toggleAuthMode(false); 
+                    });
+                }
+            });
+        }
+
+        function authLogin() {
+            const email = document.getElementById('login-email').value.trim().toLowerCase(); const pass = document.getElementById('login-pass').value;
+            if (!email || !pass) return showAlert("Error", "Ingrese correo y contraseña.", "warning");
+            if (email === "admin@blackdiamond.com" && pass === "admin123") { currentUser = { id: "admin_1", name: "Administrador Central", email: email, role: "admin" }; localStorage.setItem('bd_session', JSON.stringify(currentUser)); loadDashboard(); return; }
+            db.ref('users').orderByChild('email').equalTo(email).once('value', snapshot => {
+                if (snapshot.exists()) {
+                    let userFound = null;
+                    snapshot.forEach(child => { let data = child.val(); if (data.pass === pass) userFound = data; });
+                    if (userFound) { currentUser = userFound; localStorage.setItem('bd_session', JSON.stringify(currentUser)); loadDashboard(); } else { showAlert("Acceso Denegado", "Contraseña incorrecta.", "error"); }
+                } else { showAlert("Cuenta Inexistente", "No hay registros con ese correo.", "error"); }
+            });
+        }
+
+        function sendForm(event) {
+            event.preventDefault();
+            const formId = 'form_' + Date.now().toString(36);
+            
+            // DATOS NUEVOS DEL FORMULARIO
+            const formData = {
+                id: formId,
+                userId: currentUser.id || 'desconocido',
+                userName: currentUser.name || 'Operador',
+                mercancia: document.getElementById('form-importar').value || '',
+                presupuesto: document.getElementById('form-presupuesto').value || '',
+                status: 'pendiente',
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            };
+
+            db.ref('forms/' + formId).set(formData).then(() => {
+                
+                showAlert("Formulario Transmitido", "Declaración registrada exitosamente.", "success");
+                document.getElementById('aduanaForm').reset();
+                
+                const numeroDestino = "584262262547"; 
+                // MENSAJE DE WHATSAPP ACTUALIZADO
+                const mensaje = `*Nueva Solicitud de Importación*%0A%0A` +
+                                `*Cliente:* ${formData.userName}%0A` +
+                                `*Mercancía a Importar:* ${formData.mercancia}%0A` +
+                                `*Presupuesto:* ${formData.presupuesto}`;
+                
+                window.open(`https://wa.me/${numeroDestino}?text=${mensaje}`, '_blank');
+                
+            }).catch(error => { 
+                showAlert("Error al Enviar", "Hubo un problema de conexión con la base de datos.", "error"); 
+            });
+        }
+
+        function startAdminListeners() {
+            db.ref('users').on('value', snapshot => {
+                const tbody = document.getElementById('admin-tbody-users');
+                tbody.innerHTML = '';
+                if(snapshot.exists()) {
+                    snapshot.forEach(child => {
+                        let u = child.val();
+                        // MOSTRAR FECHA DE REGISTRO
+                        let fecha = u.fechaRegistro || 'Sin registro';
+                        tbody.innerHTML += `<tr><td><strong>${u.name || '-'}</strong></td><td>${u.phone || '-'}</td><td>${u.email || '-'}</td><td>${fecha}</td><td><button class="btn-action btn-delete" onclick="adminDeleteUser('${u.id}')"><i class="fa-solid fa-trash"></i> Expulsar</button></td></tr>`;
+                    });
+                } else { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">No hay operadores registrados.</td></tr>`; }
+            });
+
+            db.ref('forms').on('value', snapshot => {
+                const tbody = document.getElementById('admin-tbody-forms');
+                tbody.innerHTML = '';
+                
+                if(snapshot.exists()) {
+                    let formsArray = [];
+                    snapshot.forEach(child => {
+                        if (child.val() && typeof child.val() === 'object') {
+                            formsArray.push(child.val());
+                        }
+                    });
+                    formsArray.reverse(); 
+
+                    formsArray.forEach(f => {
+                        let estatus = f.status || 'pendiente';
+                        let badgeClass = estatus === 'aprobado' ? 'approved' : (estatus === 'denegado' ? 'denied' : 'pending');
+                        let statusText = estatus.charAt(0).toUpperCase() + estatus.slice(1);
+                        
+                        let nombreUser = f.userName || 'Usuario Sin Nombre';
+                        // LEER LOS NUEVOS CAMPOS PARA EL PANEL
+                        let merc = f.mercancia || 'N/A';
+                        let pres = f.presupuesto || 'N/A';
+                        let fid = f.id || '';
+
+                        if(fid) {
+                            tbody.innerHTML += `
+                                <tr>
+                                    <td><strong>${nombreUser}</strong></td>
+                                    <td>${merc}</td>
+                                    <td><strong>${pres}</strong></td>
+                                    <td><span class="badge ${badgeClass}">${statusText}</span></td>
+                                    <td class="actions-cell">
+                                        <button class="btn-action btn-approve" onclick="adminChangeStatus('${fid}', 'aprobado')" title="Aprobar"><i class="fa-solid fa-check"></i></button>
+                                        <button class="btn-action btn-deny" onclick="adminChangeStatus('${fid}', 'denegado')" title="Denegar"><i class="fa-solid fa-xmark"></i></button>
+                                        <button class="btn-action" style="background:var(--pending); color:#000;" onclick="adminChangeStatus('${fid}', 'pendiente')" title="Reevaluar"><i class="fa-solid fa-rotate-left"></i></button>
+                                    </td>
+                                </tr>
+                            `;
+                        }
+                    });
+                } else {
+                    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">No hay declaraciones registradas.</td></tr>`;
+                }
+            });
+        }
+
+        function adminChangeStatus(formId, newStatus) { db.ref('forms/' + formId).update({ status: newStatus }).then(() => { showAlert("Estatus Modificado", "Se ha actualizado la evaluación del documento.", "success"); }); }
+        function adminDeleteUser(userId) { if(confirm("¿Estás seguro de eliminar a este usuario?")) { db.ref('users/' + userId).remove().then(() => { showAlert("Operador Eliminado", "Cuenta removida con éxito.", "success"); }); } }
+    </script>
+</body>
+</html>
